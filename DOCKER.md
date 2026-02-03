@@ -2,13 +2,26 @@
 
 ## Quick Start
 
+### 1. Start Local Blockchain (runs outside Docker)
+
+```bash
+npm run contracts:node
+```
+
+### 2. Deploy Contracts
+
+```bash
+npm run contracts:deploy
+```
+
+### 3. Start Docker Services
+
 ```bash
 docker compose up --build
 ```
 
-This starts all services:
+This starts:
 - **PostgreSQL** (port 5432) - Shared database
-- **Hardhat Node** (port 8545) - Local blockchain
 - **Backend** (port 3000) - Hono API server
 - **Indexer** - Subsquid processor
 - **Frontend** (port 5173) - Vite dev server
@@ -18,10 +31,11 @@ This starts all services:
 | Service | Port | Description |
 |---------|------|-------------|
 | `db` | 5432 | PostgreSQL database |
-| `contracts` | 8545 | Hardhat local blockchain node |
 | `backend` | 3000 | Hono + Bun API server |
 | `indexer` | - | Subsquid blockchain indexer |
 | `frontend` | 5173 | Vite + React dev server |
+
+**Note:** Hardhat node runs locally (outside Docker) on port 8545.
 
 ## Hot Reloading
 
@@ -30,7 +44,6 @@ All services support hot-reloading in development:
 - **Frontend**: Vite HMR
 - **Backend**: Bun `--watch` mode
 - **Indexer**: tsc-watch with auto-restart
-- **Contracts**: Hardhat node (restart to redeploy)
 
 Source files are mounted as volumes, so changes reflect immediately.
 
@@ -74,12 +87,16 @@ docker compose exec contracts npm run deploy:local
 
 ## Initial Setup
 
-### 1. Deploy Contracts
-
-After starting, deploy contracts to the local node:
+### 1. Start Hardhat Node (Terminal 1)
 
 ```bash
-docker compose exec contracts npm run deploy:local
+npm run contracts:node
+```
+
+### 2. Deploy Contracts (Terminal 2)
+
+```bash
+npm run contracts:deploy
 ```
 
 Copy the deployed addresses and update `.env`:
@@ -89,14 +106,20 @@ JOB_ESCROW_ADDRESS=0x...
 USDC_ADDRESS=0x...
 ```
 
-### 2. Run Database Migrations
+### 3. Start Docker Services
+
+```bash
+docker compose up
+```
+
+### 4. Run Database Migrations
 
 ```bash
 docker compose exec backend bun run db:migrate
 docker compose exec indexer npm run db:migrate
 ```
 
-### 3. Access Services
+### 5. Access Services
 
 - Frontend: http://localhost:5173
 - Backend API: http://localhost:3000
@@ -117,8 +140,11 @@ docker compose exec db psql -U postgres -d envoy
 
 ### Contract deployment fails
 ```bash
-docker compose restart contracts
-docker compose exec contracts npm run deploy:local
+# Make sure Hardhat node is running
+npm run contracts:node
+
+# In another terminal
+npm run contracts:deploy
 ```
 
 ### Clear everything and start fresh

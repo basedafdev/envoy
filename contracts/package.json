@@ -1,7 +1,6 @@
 {
   "name": "envoy-contracts",
   "version": "1.0.0",
-  "type": "module",
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",

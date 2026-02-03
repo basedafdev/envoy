@@ -1,14 +1,17 @@
-import { EvmBatchProcessor } from '@subsquid/evm-processor';
-import { lookupArchive } from '@subsquid/archive-registry';
-
-const ARC_CHAIN_ID = parseInt(process.env.ARC_CHAIN_ID || '16180');
+import {
+  BlockHeader,
+  DataHandlerContext,
+  EvmBatchProcessor,
+  EvmBatchProcessorFields,
+  Log as _Log,
+  Transaction as _Transaction,
+} from '@subsquid/evm-processor';
+import { Store } from '@subsquid/typeorm-store';
 
 export const processor = new EvmBatchProcessor()
-  .setDataSource({
-    chain: {
-      url: process.env.ARC_RPC_URL || 'https://rpc.arc.network',
-      rateLimit: 10,
-    },
+  .setRpcEndpoint({
+    url: process.env.ARC_RPC_URL || 'https://rpc.arc.network',
+    rateLimit: 10,
   })
   .setFinalityConfirmation(10)
   .setBlockRange({
@@ -18,6 +21,7 @@ export const processor = new EvmBatchProcessor()
     log: {
       topics: true,
       data: true,
+      transactionHash: true,
     },
     transaction: {
       hash: true,
@@ -26,10 +30,16 @@ export const processor = new EvmBatchProcessor()
     },
   })
   .addLog({
-    address: [process.env.AGENT_REGISTRY_ADDRESS!],
+    address: process.env.AGENT_REGISTRY_ADDRESS ? [process.env.AGENT_REGISTRY_ADDRESS.toLowerCase()] : [],
     topic0: [],
   })
   .addLog({
-    address: [process.env.JOB_ESCROW_ADDRESS!],
+    address: process.env.JOB_ESCROW_ADDRESS ? [process.env.JOB_ESCROW_ADDRESS.toLowerCase()] : [],
     topic0: [],
   });
+
+export type Fields = EvmBatchProcessorFields<typeof processor>;
+export type Context = DataHandlerContext<Store, Fields>;
+export type Block = BlockHeader<Fields>;
+export type Log = _Log<Fields>;
+export type Transaction = _Transaction<Fields>;

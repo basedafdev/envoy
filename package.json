@@ -14,8 +14,9 @@
     "dev:down": "docker compose down",
     "dev:clean": "docker compose down -v",
     "db:up": "docker compose up db -d",
-    "contracts:node": "docker compose up contracts -d",
-    "contracts:deploy": "docker compose exec contracts npm run deploy:local"
+    "contracts:node": "cd contracts && npm run node",
+    "contracts:compile": "cd contracts && npm run compile",
+    "contracts:deploy": "cd contracts && npm run deploy:local"
   },
   "workspaces": [
     "frontend",

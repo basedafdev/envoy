@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { TypeormDatabase } from '@subsquid/typeorm-store';
 import { processor } from './processor';
 import * as agentHandlers from './handlers/agentHandlers';

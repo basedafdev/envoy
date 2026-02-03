@@ -61,10 +61,9 @@ typechain-types/
 deployments/
 .openzeppelin/
 
-# Subsquid / Indexer
-src/model/
-src/abi/*.ts
-!src/abi/README.md
+# Subsquid / Indexer (generated files - uncomment if using codegen)
+# indexer/src/model/
+# indexer/src/abi/*.ts
 
 # Frontend
 .turbo/

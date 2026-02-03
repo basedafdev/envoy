@@ -27,7 +27,21 @@ This installs dependencies for all modules:
 - `indexer` - npm
 - `contracts` - npm
 
-### 2. Start Development Environment
+### 2. Start Local Blockchain (Terminal 1)
+
+```bash
+npm run contracts:node
+```
+
+### 3. Deploy Contracts (Terminal 2)
+
+```bash
+npm run contracts:deploy
+```
+
+Copy the deployed addresses to `.env`.
+
+### 4. Start Development Environment
 
 ```bash
 npm run dev
@@ -37,12 +51,6 @@ Or with a fresh build:
 
 ```bash
 npm run dev:build
-```
-
-### 3. Deploy Contracts (first time)
-
-```bash
-npm run contracts:deploy
 ```
 
 ### 4. Access Services
@@ -64,7 +72,8 @@ npm run contracts:deploy
 | `npm run dev:down` | Stop all services |
 | `npm run dev:clean` | Stop and remove all data (fresh start) |
 | `npm run db:up` | Start only the database |
-| `npm run contracts:node` | Start only the Hardhat node |
+| `npm run contracts:node` | Start Hardhat node locally |
+| `npm run contracts:compile` | Compile smart contracts |
 | `npm run contracts:deploy` | Deploy contracts to local node |
 
 ## Module-Specific Commands

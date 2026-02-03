@@ -18,22 +18,6 @@ services:
       timeout: 5s
       retries: 5
 
-  contracts:
-    build:
-      context: ./contracts
-      dockerfile: Dockerfile.dev
-    container_name: envoy-contracts
-    ports:
-      - "8545:8545"
-    volumes:
-      - ./contracts:/app
-      - /app/node_modules
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:8545 || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   backend:
     build:
       context: ./backend
@@ -45,13 +29,11 @@ services:
       - NODE_ENV=development
       - PORT=3000
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/envoy
-      - ARC_RPC_URL=http://contracts:8545
-      - ARC_CHAIN_ID=31337
+      - ARC_RPC_URL=${ARC_RPC_URL:-http://host.docker.internal:8545}
+      - ARC_CHAIN_ID=${ARC_CHAIN_ID:-31337}
       - JWT_SECRET=dev-secret-change-in-production
     depends_on:
       db:
-        condition: service_healthy
-      contracts:
         condition: service_healthy
     volumes:
       - ./backend:/app
@@ -68,14 +50,12 @@ services:
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASS=postgres
-      - ARC_RPC_URL=http://contracts:8545
-      - ARC_CHAIN_ID=31337
-      - AGENT_REGISTRY_ADDRESS=0x0000000000000000000000000000000000000000
-      - JOB_ESCROW_ADDRESS=0x0000000000000000000000000000000000000000
+      - ARC_RPC_URL=${ARC_RPC_URL:-http://host.docker.internal:8545}
+      - ARC_CHAIN_ID=${ARC_CHAIN_ID:-31337}
+      - AGENT_REGISTRY_ADDRESS=${AGENT_REGISTRY_ADDRESS:-0x0000000000000000000000000000000000000000}
+      - JOB_ESCROW_ADDRESS=${JOB_ESCROW_ADDRESS:-0x0000000000000000000000000000000000000000}
     depends_on:
       db:
-        condition: service_healthy
-      contracts:
         condition: service_healthy
     volumes:
       - ./indexer:/app
@@ -91,8 +71,8 @@ services:
     environment:
       - VITE_API_BASE_URL=http://localhost:3000
       - VITE_WS_URL=ws://localhost:3000
-      - VITE_ARC_RPC_URL=http://localhost:8545
-      - VITE_ARC_CHAIN_ID=31337
+      - VITE_ARC_RPC_URL=${VITE_ARC_RPC_URL:-http://localhost:8545}
+      - VITE_ARC_CHAIN_ID=${VITE_ARC_CHAIN_ID:-31337}
     depends_on:
       - backend
     volumes:
