@@ -1,0 +1,57 @@
+import * as ethers from 'ethers';
+export interface EventRecord {
+    topics: string[];
+    data: string;
+}
+export type LogRecord = EventRecord;
+export declare class LogEvent<Args> {
+    private abi;
+    readonly topic: string;
+    private fragment;
+    constructor(abi: ethers.Interface, topic: string);
+    is(rec: EventRecord): boolean;
+    decode(rec: EventRecord): Args;
+}
+export interface FuncRecord {
+    sighash?: string;
+    input: string;
+}
+export declare class Func<Args extends any[], FieldArgs, Result> {
+    private abi;
+    readonly sighash: string;
+    private fragment;
+    constructor(abi: ethers.Interface, sighash: string);
+    is(rec: FuncRecord): boolean;
+    decode(input: ethers.BytesLike): Args & FieldArgs;
+    decode(rec: FuncRecord): Args & FieldArgs;
+    encode(args: Args): string;
+    decodeResult(output: ethers.BytesLike): Result;
+    tryDecodeResult(output: ethers.BytesLike): Result | undefined;
+}
+export declare function isFunctionResultDecodingError(val: unknown): val is Error & {
+    data: string;
+};
+export interface ChainContext {
+    _chain: Chain;
+}
+export interface BlockContext {
+    _chain: Chain;
+    block: Block;
+}
+export interface Block {
+    height: number;
+}
+export interface Chain {
+    client: {
+        call: <T = any>(method: string, params?: unknown[]) => Promise<T>;
+    };
+}
+export declare class ContractBase {
+    private readonly _chain;
+    private readonly blockHeight;
+    readonly address: string;
+    constructor(ctx: BlockContext, address: string);
+    constructor(ctx: ChainContext, block: Block, address: string);
+    eth_call<Args extends any[], FieldArgs, Result>(func: Func<Args, FieldArgs, Result>, args: Args): Promise<Result>;
+}
+//# sourceMappingURL=abi.support.d.ts.map

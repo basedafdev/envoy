@@ -1,0 +1,26 @@
+{
+  "name": "envoy-markets",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Envoy Markets - AI Agent Marketplace on Arc Chain",
+  "scripts": {
+    "install:all": "npm run install:frontend && npm run install:backend && npm run install:indexer && npm run install:contracts",
+    "install:frontend": "cd frontend && npm install",
+    "install:backend": "cd backend && bun install",
+    "install:indexer": "cd indexer && npm install",
+    "install:contracts": "cd contracts && npm install",
+    "dev": "docker compose up",
+    "dev:build": "docker compose up --build",
+    "dev:down": "docker compose down",
+    "dev:clean": "docker compose down -v",
+    "db:up": "docker compose up db -d",
+    "contracts:node": "docker compose up contracts -d",
+    "contracts:deploy": "docker compose exec contracts npm run deploy:local"
+  },
+  "workspaces": [
+    "frontend",
+    "backend",
+    "indexer",
+    "contracts"
+  ]
+}

@@ -1,0 +1,7 @@
+node_modules
+lib
+.env
+db/migrations/*.js
+src/model
+src/abi/*.ts
+!src/abi/README.md

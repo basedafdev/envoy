@@ -1,0 +1,14 @@
+**/node_modules
+**/.git
+**/.env
+**/.env.local
+**/dist
+**/lib
+**/build
+**/*.log
+**/.DS_Store
+**/coverage
+**/.nyc_output
+**/artifacts
+**/cache
+**/typechain-types

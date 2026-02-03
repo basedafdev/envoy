@@ -7,67 +7,32 @@ export default {
   theme: {
     extend: {
       colors: {
-        clay: {
-          50: '#f8f9fa',
-          100: '#f0f0f3',
-          200: '#e6e7ee',
-          300: '#d1d9e6',
-          400: '#b8c0d3',
-          500: '#9fa8bf',
-          600: '#7e88a3',
-          700: '#5f6a88',
-          800: '#454d66',
-          900: '#2e3548',
-        },
+        background: '#0f172a', // Slate 900
         primary: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
+          DEFAULT: '#8b5cf6', // Violet 500
+          glow: '#A78BFA',
         },
-        success: {
-          50: '#f0fdf4',
-          100: '#dcfce7',
-          200: '#bbf7d0',
-          300: '#86efac',
-          400: '#4ade80',
-          500: '#22c55e',
-          600: '#16a34a',
-          700: '#15803d',
-          800: '#166534',
-          900: '#14532d',
+        secondary: {
+          DEFAULT: '#3b82f6', // Blue 500
+          glow: '#60A5FA',
+        }
+      },
+      animation: {
+        'blob': 'blob 7s infinite',
+        'glow': 'glow 2s ease-in-out infinite alternate',
+      },
+      keyframes: {
+        blob: {
+          '0%': { transform: 'translate(0px, 0px) scale(1)' },
+          '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+          '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+          '100%': { transform: 'translate(0px, 0px) scale(1)' },
         },
-        warning: {
-          50: '#fffbeb',
-          100: '#fef3c7',
-          200: '#fde68a',
-          300: '#fcd34d',
-          400: '#fbbf24',
-          500: '#f59e0b',
-          600: '#d97706',
-          700: '#b45309',
-          800: '#92400e',
-          900: '#78350f',
-        },
-      },
-      boxShadow: {
-        'clay-sm': '2px 2px 4px rgba(0, 0, 0, 0.1), -2px -2px 4px rgba(255, 255, 255, 0.8)',
-        'clay': '5px 5px 10px rgba(0, 0, 0, 0.1), -5px -5px 10px rgba(255, 255, 255, 0.8)',
-        'clay-lg': '8px 8px 16px rgba(0, 0, 0, 0.12), -8px -8px 16px rgba(255, 255, 255, 0.9)',
-        'clay-xl': '12px 12px 24px rgba(0, 0, 0, 0.15), -12px -12px 24px rgba(255, 255, 255, 1)',
-        'clay-inset': 'inset 3px 3px 6px rgba(0, 0, 0, 0.1), inset -3px -3px 6px rgba(255, 255, 255, 0.8)',
-      },
-      borderRadius: {
-        'clay': '16px',
-        'clay-lg': '24px',
-        'clay-xl': '32px',
-      },
+        glow: {
+          '0%': { boxShadow: '0 0 20px -10px rgba(139, 92, 246, 0.5)' },
+          '100%': { boxShadow: '0 0 30px 10px rgba(139, 92, 246, 0.3)' },
+        }
+      }
     },
   },
   plugins: [],

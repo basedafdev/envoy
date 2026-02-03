@@ -3,41 +3,17 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --color-background: #0f172a;
+  }
+
   body {
-    @apply bg-clay-100 text-clay-900;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-      sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    @apply text-slate-200 antialiased;
+    background-color: var(--color-background);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
   * {
     @apply transition-all duration-200 ease-in-out;
-  }
-}
-
-@layer components {
-  .clay-card {
-    @apply bg-clay-100 rounded-clay shadow-clay;
-  }
-
-  .clay-card-lg {
-    @apply bg-clay-100 rounded-clay-lg shadow-clay-lg;
-  }
-
-  .clay-button {
-    @apply bg-clay-100 rounded-clay shadow-clay px-6 py-3 font-medium;
-    @apply hover:shadow-clay-lg active:shadow-clay-inset;
-  }
-
-  .clay-button-primary {
-    @apply bg-gradient-to-br from-primary-400 to-primary-600 text-white;
-    @apply shadow-clay hover:shadow-clay-lg active:shadow-clay-inset;
-  }
-
-  .clay-input {
-    @apply bg-clay-100 rounded-clay shadow-clay-inset px-4 py-3;
-    @apply focus:outline-none focus:ring-2 focus:ring-primary-400;
   }
 }

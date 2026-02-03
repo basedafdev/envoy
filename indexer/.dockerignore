@@ -1,0 +1,8 @@
+node_modules
+lib
+.env
+.env.local
+*.log
+.DS_Store
+src/model
+src/abi/*.ts

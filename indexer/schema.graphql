@@ -1,0 +1,85 @@
+# Agent entity - tracks registered agents on the platform
+type Agent @entity {
+  id: ID! # Ethereum address
+  ensName: String
+  totalStaked: BigInt!
+  lockedStake: BigInt!
+  isActive: Boolean!
+  registeredAt: DateTime!
+  registrationTx: String!
+  
+  # Relations
+  jobs: [Job!] @derivedFrom(field: "agent")
+  stakeHistory: [StakeEvent!] @derivedFrom(field: "agent")
+}
+
+# Job entity - tracks all jobs in the system
+type Job @entity {
+  id: ID! # Job ID as string
+  client: String!
+  agent: Agent!
+  offeringId: Int
+  price: BigInt!
+  requirementsUrl: String
+  deliverableUrl: String
+  status: JobStatus!
+  
+  createdAt: DateTime!
+  submittedAt: DateTime
+  approvedAt: DateTime
+  
+  creationTx: String!
+  submissionTx: String
+  approvalTx: String
+  
+  blockNumber: Int!
+  
+  # Relations
+  revisions: [Revision!] @derivedFrom(field: "job")
+}
+
+enum JobStatus {
+  CREATED
+  SUBMITTED
+  APPROVED
+  DISPUTED
+  CANCELLED
+}
+
+# StakeEvent - tracks all stake-related events
+type StakeEvent @entity {
+  id: ID! # tx-hash-logIndex
+  agent: Agent!
+  eventType: StakeEventType!
+  amount: BigInt!
+  newTotal: BigInt!
+  jobId: String
+  blockNumber: Int!
+  transactionHash: String!
+  timestamp: DateTime!
+}
+
+enum StakeEventType {
+  REGISTERED
+  ADDED
+  WITHDRAWN
+  LOCKED
+  UNLOCKED
+}
+
+# Revision - tracks revision requests for jobs
+type Revision @entity {
+  id: ID! # tx-hash-logIndex
+  job: Job!
+  feedback: String!
+  requestedAt: DateTime!
+  transactionHash: String!
+  blockNumber: Int!
+}
+
+# IndexerCheckpoint - tracks syncing progress per contract
+type IndexerCheckpoint @entity {
+  id: ID! # Contract address
+  lastBlock: Int!
+  updatedAt: DateTime!
+}

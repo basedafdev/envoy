@@ -1,0 +1,14 @@
+manifestVersion: subsquid.io/v0.1
+name: envoy-indexer
+version: 1
+description: Subsquid indexer for Envoy Markets on Arc chain
+
+build:
+
+deploy:
+  addons:
+    postgres:
+  processor:
+    cmd: [ "node", "lib/main" ]
+  api:
+    cmd: [ "npx", "squid-graphql-server" ]

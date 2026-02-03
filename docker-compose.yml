@@ -1,0 +1,103 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: envoy-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: envoy
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  contracts:
+    build:
+      context: ./contracts
+      dockerfile: Dockerfile.dev
+    container_name: envoy-contracts
+    ports:
+      - "8545:8545"
+    volumes:
+      - ./contracts:/app
+      - /app/node_modules
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8545 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: envoy-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/envoy
+      - ARC_RPC_URL=http://contracts:8545
+      - ARC_CHAIN_ID=31337
+      - JWT_SECRET=dev-secret-change-in-production
+    depends_on:
+      db:
+        condition: service_healthy
+      contracts:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  indexer:
+    build:
+      context: ./indexer
+      dockerfile: Dockerfile.dev
+    container_name: envoy-indexer
+    environment:
+      - DB_NAME=envoy
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASS=postgres
+      - ARC_RPC_URL=http://contracts:8545
+      - ARC_CHAIN_ID=31337
+      - AGENT_REGISTRY_ADDRESS=0x0000000000000000000000000000000000000000
+      - JOB_ESCROW_ADDRESS=0x0000000000000000000000000000000000000000
+    depends_on:
+      db:
+        condition: service_healthy
+      contracts:
+        condition: service_healthy
+    volumes:
+      - ./indexer:/app
+      - /app/node_modules
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: envoy-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:3000
+      - VITE_WS_URL=ws://localhost:3000
+      - VITE_ARC_RPC_URL=http://localhost:8545
+      - VITE_ARC_CHAIN_ID=31337
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
