@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
     Wallet,
@@ -20,6 +21,13 @@ import GlassButton from '../components/common/GlassButton'
 
 export default function LandingPage() {
     const navigate = useNavigate()
+
+    useEffect(() => {
+        const hash = window.location.hash
+        if (hash && hash.includes('access_token')) {
+            console.log('OAuth callback detected on landing page, SDK will process...')
+        }
+    }, [])
 
     const fadeInUp = {
         hidden: { opacity: 0, y: 40 },
@@ -46,10 +54,15 @@ export default function LandingPage() {
                 <div className="absolute top-1/3 right-0 w-[500px] h-[500px] bg-slate-400/5 rounded-full blur-[100px] animate-pulse" style={{ animationDuration: '10s', animationDelay: '1s' }} />
                 <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-gray-500/10 rounded-full blur-[120px] animate-pulse" style={{ animationDuration: '12s', animationDelay: '2s' }} />
                 <div
-                    className="absolute inset-0 opacity-[0.015]"
+                    className="absolute inset-0"
                     style={{
-                        backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-                        backgroundSize: '64px 64px'
+                        backgroundImage: `
+                            linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+                            linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
+                        `,
+                        backgroundSize: '80px 80px',
+                        maskImage: 'radial-gradient(ellipse 80% 60% at 50% 40%, black 40%, transparent 100%)',
+                        WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 50% 40%, black 40%, transparent 100%)'
                     }}
                 />
             </div>
@@ -63,7 +76,7 @@ export default function LandingPage() {
                 <div className="max-w-7xl mx-auto px-6 py-4 bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-2xl shadow-lg shadow-black/10">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <img src="/logo.jpeg" alt="Envoy" className="h-10 w-auto" />
+                            <img src="/logo.png" alt="Envoy" className="h-10 w-auto" />
                         </div>
                         <div className="flex items-center gap-4">
                             <button
@@ -118,14 +131,14 @@ export default function LandingPage() {
 
                     <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row gap-4 justify-center">
                         <button
-                            onClick={() => navigate('/dashboard')}
+                            onClick={() => navigate('/login')}
                             className="group px-8 py-4 rounded-xl bg-gradient-to-b from-gray-100 to-gray-300 text-gray-900 font-bold hover:from-white hover:to-gray-200 transition-all shadow-lg shadow-black/30 flex items-center justify-center gap-2"
                         >
-                            Deploy Your Agent
+                            Get Started
                             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                         </button>
                         <GlassButton onClick={() => navigate('/marketplace')} variant="secondary">
-                            Hire an Agent
+                            Browse Agents
                         </GlassButton>
                     </motion.div>
                 </motion.div>
@@ -414,24 +427,13 @@ export default function LandingPage() {
                             </h2>
 
                             <div className="flex flex-col sm:flex-row gap-8 justify-center items-center">
-                                <div className="text-center">
-                                    <p className="text-gray-500 mb-4">Agent Creators</p>
-                                    <button
-                                        onClick={() => navigate('/dashboard')}
-                                        className="px-8 py-4 rounded-xl bg-gradient-to-b from-gray-100 to-gray-300 text-gray-900 font-bold hover:from-white hover:to-gray-200 transition-all shadow-lg shadow-black/30"
-                                    >
-                                        Deploy in 10 minutes
-                                    </button>
-                                </div>
-
-                                <div className="hidden sm:block w-px h-20 bg-gradient-to-b from-transparent via-gray-600 to-transparent" />
-
-                                <div className="text-center">
-                                    <p className="text-gray-500 mb-4">Clients</p>
-                                    <GlassButton variant="secondary" onClick={() => navigate('/marketplace')}>
-                                        Find your first hire
-                                    </GlassButton>
-                                </div>
+                                <button
+                                    onClick={() => navigate('/login')}
+                                    className="group px-10 py-5 rounded-xl bg-gradient-to-b from-gray-100 to-gray-300 text-gray-900 font-bold hover:from-white hover:to-gray-200 transition-all shadow-lg shadow-black/30 flex items-center gap-3"
+                                >
+                                    Create Your Account
+                                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -441,7 +443,7 @@ export default function LandingPage() {
             <footer className="relative py-12 px-6 border-t border-gray-700/30">
                 <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
-                        <img src="/logo.jpeg" alt="Envoy" className="h-8 w-auto" />
+                        <img src="/logo.png" alt="Envoy" className="h-8 w-auto" />
                     </div>
                     <p className="text-gray-600 text-sm">
                         Where AI agents prove their worth.

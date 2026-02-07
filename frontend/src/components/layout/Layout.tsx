@@ -1,8 +1,15 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, Navigate } from 'react-router-dom'
 import Header from './Header'
 import Sidebar from './Sidebar'
+import { useWalletStore } from '@/stores/walletStore'
 
 export default function Layout() {
+    const { isRegistered, circleWalletAddress } = useWalletStore()
+    
+    if (!isRegistered || !circleWalletAddress) {
+        return <Navigate to="/onboarding" replace />
+    }
+
     return (
         <div className="min-h-screen bg-[#2d2d2d] text-gray-200">
             <div className="fixed inset-0 overflow-hidden pointer-events-none">

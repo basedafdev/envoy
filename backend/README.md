@@ -11,9 +11,476 @@ The backend is the **core API server** for Envoy Markets, built with **Hono** (l
 | **Hono** | Web framework (REST API routes) |
 | **Bun** | JavaScript runtime (faster than Node.js) |
 | **PostgreSQL** | Primary database (jobs, agents, reputation) |
-| **Circle Wallets SDK** | Agent wallet management |
+| **Circle User-Controlled Wallets SDK** | Non-custodial wallet management |
 | **Circle Contracts SDK** | Smart contract deployment & interaction |
 | **WebSockets** | Real-time updates (job notifications, chat) |
+
+## Circle Wallet Integration (User-Controlled / Non-Custodial)
+
+The backend integrates with Circle's **User-Controlled Wallets SDK** to provide non-custodial wallet functionality. This is critical for trust:
+
+- **Backend can ONLY create challenges** - it cannot sign transactions
+- **Users must approve every transaction** with their PIN
+- **Platform cannot move user funds** without user action
+
+### Installation
+
+```bash
+bun add @circle-fin/user-controlled-wallets
+```
+
+### Files to Create
+
+```
+backend/src/
+├── services/
+│   └── circle-wallet.service.ts   # Circle SDK wrapper
+├── routes/
+│   ├── agents.ts                  # Agent registration + staking
+│   └── clients.ts                 # Client registration
+└── db/
+    └── schema.ts                  # Updated with Circle wallet fields
+```
+
+### Circle Wallet Service Implementation
+
+```typescript
+// backend/src/services/circle-wallet.service.ts
+import CircleSDK from '@circle-fin/user-controlled-wallets';
+
+class CircleWalletService {
+  private client: CircleSDK;
+
+  constructor() {
+    this.client = new CircleSDK({
+      apiKey: process.env.CIRCLE_API_KEY!,
+    });
+  }
+
+  /**
+   * Create a new user in Circle's system
+   */
+  async createUser(userId: string) {
+    const response = await this.client.createUser({ userId });
+    return response.data;
+  }
+
+  /**
+   * Get session token for frontend SDK
+   * Frontend needs this to execute challenges
+   */
+  async getUserToken(userId: string) {
+    const response = await this.client.createUserToken({ userId });
+    return {
+      userToken: response.data?.userToken,
+      encryptionKey: response.data?.encryptionKey,
+    };
+  }
+
+  /**
+   * Initialize wallet with PIN setup
+   * Returns challengeId for frontend to execute
+   */
+  async initializeUserWallet(userId: string) {
+    const { userToken } = await this.getUserToken(userId);
+
+    const response = await this.client.createUserPinWithWallets({
+      userToken: userToken!,
+      blockchains: ['ARC-TESTNET'], // or 'ARC-MAINNET' for production
+      accountType: 'SCA',
+    });
+
+    return { challengeId: response.data?.challengeId };
+  }
+
+  /**
+   * Get user's wallets after creation
+   */
+  async getUserWallets(userId: string) {
+    const { userToken } = await this.getUserToken(userId);
+    const response = await this.client.listWallets({ userToken: userToken! });
+    return response.data?.wallets;
+  }
+
+  /**
+   * Initiate smart contract call
+   * Returns challengeId - user must approve with PIN
+   */
+  async initiateContractExecution(
+    userId: string,
+    walletId: string,
+    contractAddress: string,
+    abiSignature: string,
+    abiParameters: any[]
+  ) {
+    const { userToken } = await this.getUserToken(userId);
+
+    const response = await this.client.createContractExecutionChallenge({
+      userToken: userToken!,
+      walletId,
+      contractAddress,
+      abiFunctionSignature: abiSignature,
+      abiParameters,
+      fee: { type: 'level', config: { feeLevel: 'MEDIUM' } },
+    });
+
+    return { challengeId: response.data?.challengeId };
+  }
+
+  /**
+   * Initiate token transfer
+   * Returns challengeId - user must approve with PIN
+   */
+  async initiateTransfer(
+    userId: string,
+    walletId: string,
+    tokenId: string,
+    destinationAddress: string,
+    amount: string
+  ) {
+    const { userToken } = await this.getUserToken(userId);
+
+    const response = await this.client.createTransferChallenge({
+      userToken: userToken!,
+      walletId,
+      tokenId,
+      destinationAddress,
+      amounts: [amount],
+      fee: { type: 'level', config: { feeLevel: 'MEDIUM' } },
+    });
+
+    return { challengeId: response.data?.challengeId };
+  }
+
+  /**
+   * Get wallet token balance
+   */
+  async getWalletBalance(walletId: string) {
+    const response = await this.client.getWalletTokenBalance({ id: walletId });
+    return response.data?.tokenBalances;
+  }
+}
+
+export const circleWalletService = new CircleWalletService();
+```
+
+### Agent Registration Routes
+
+```typescript
+// backend/src/routes/agents.ts
+import { Hono } from 'hono';
+import { circleWalletService } from '../services/circle-wallet.service';
+import { db } from '../db';
+import { agents, pendingAgentRegistrations } from '../db/schema';
+import { eq } from 'drizzle-orm';
+
+const agentRoutes = new Hono();
+
+/**
+ * POST /api/agents/register
+ * Step 1: Start registration - creates Circle user and wallet challenge
+ */
+agentRoutes.post('/register', async (c) => {
+  const { name, description, offerings } = await c.req.json();
+  
+  // Generate unique user ID
+  const userId = `agent_${crypto.randomUUID()}`;
+  
+  // Create user in Circle
+  await circleWalletService.createUser(userId);
+  
+  // Get session credentials for frontend SDK
+  const { userToken, encryptionKey } = await circleWalletService.getUserToken(userId);
+  
+  // Initialize wallet - returns challenge for PIN setup
+  const { challengeId } = await circleWalletService.initializeUserWallet(userId);
+  
+  // Store pending registration
+  await db.insert(pendingAgentRegistrations).values({
+    id: userId,
+    agentName: name,
+    description,
+    offerings: JSON.stringify(offerings),
+    status: 'pending_wallet',
+    createdAt: new Date(),
+  });
+  
+  return c.json({
+    userId,
+    userToken,
+    encryptionKey,
+    challengeId,
+    message: 'Complete wallet setup by setting your PIN',
+  });
+});
+
+/**
+ * POST /api/agents/register/complete
+ * Step 2: Complete registration after PIN setup
+ */
+agentRoutes.post('/register/complete', async (c) => {
+  const { userId } = await c.req.json();
+  
+  // Get wallet created after PIN setup
+  const wallets = await circleWalletService.getUserWallets(userId);
+  const wallet = wallets?.[0];
+  
+  if (!wallet) {
+    return c.json({ error: 'Wallet not found. Complete PIN setup first.' }, 400);
+  }
+  
+  // Get pending registration
+  const pending = await db.query.pendingAgentRegistrations.findFirst({
+    where: (t, { eq }) => eq(t.id, userId),
+  });
+  
+  if (!pending) {
+    return c.json({ error: 'Registration not found' }, 404);
+  }
+  
+  // Create agent record
+  const agentId = crypto.randomUUID();
+  await db.insert(agents).values({
+    id: agentId,
+    circleUserId: userId,
+    circleWalletId: wallet.id,
+    circleWalletAddress: wallet.address,
+    name: pending.agentName,
+    description: pending.description,
+    ensName: `${pending.agentName}bot.envoy.eth`,
+    totalStaked: 0n,
+    lockedStake: 0n,
+    isActive: false, // Not active until staked
+    registeredAt: new Date(),
+  });
+  
+  // Clean up pending registration
+  await db.delete(pendingAgentRegistrations).where(eq(pendingAgentRegistrations.id, userId));
+  
+  return c.json({
+    success: true,
+    agentId,
+    walletId: wallet.id,
+    walletAddress: wallet.address,
+    message: 'Wallet created! Deposit USDC and stake to activate.',
+  });
+});
+
+/**
+ * POST /api/agents/:id/stake
+ * Step 3a: Initiate USDC approval for staking
+ */
+agentRoutes.post('/:id/stake', async (c) => {
+  const agentId = c.req.param('id');
+  const { amount, agentName } = await c.req.json();
+  
+  const agent = await db.query.agents.findFirst({
+    where: (t, { eq }) => eq(t.id, agentId),
+  });
+  
+  if (!agent) {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
+  
+  // Get fresh session token
+  const { userToken, encryptionKey } = await circleWalletService.getUserToken(agent.circleUserId);
+  
+  // Create USDC approval challenge
+  const { challengeId } = await circleWalletService.initiateContractExecution(
+    agent.circleUserId,
+    agent.circleWalletId,
+    process.env.USDC_ADDRESS!,
+    'approve(address,uint256)',
+    [process.env.AGENT_REGISTRY_ADDRESS!, amount]
+  );
+  
+  return c.json({
+    step: 'approval',
+    userToken,
+    encryptionKey,
+    challengeId,
+    nextStep: `/api/agents/${agentId}/stake/execute`,
+    message: 'Approve USDC spending by entering your PIN',
+  });
+});
+
+/**
+ * POST /api/agents/:id/stake/execute
+ * Step 3b: Execute stake after USDC approval
+ */
+agentRoutes.post('/:id/stake/execute', async (c) => {
+  const agentId = c.req.param('id');
+  const { amount, agentName } = await c.req.json();
+  
+  const agent = await db.query.agents.findFirst({
+    where: (t, { eq }) => eq(t.id, agentId),
+  });
+  
+  if (!agent) {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
+  
+  const { userToken, encryptionKey } = await circleWalletService.getUserToken(agent.circleUserId);
+  
+  // Create stake challenge
+  const { challengeId } = await circleWalletService.initiateContractExecution(
+    agent.circleUserId,
+    agent.circleWalletId,
+    process.env.AGENT_REGISTRY_ADDRESS!,
+    'stake(uint256,string)',
+    [amount, agentName]
+  );
+  
+  return c.json({
+    step: 'stake',
+    userToken,
+    encryptionKey,
+    challengeId,
+    message: 'Confirm staking by entering your PIN',
+  });
+});
+
+/**
+ * POST /api/agents/:id/withdraw
+ * Withdraw USDC to external address
+ */
+agentRoutes.post('/:id/withdraw', async (c) => {
+  const agentId = c.req.param('id');
+  const { toAddress, amount } = await c.req.json();
+  
+  const agent = await db.query.agents.findFirst({
+    where: (t, { eq }) => eq(t.id, agentId),
+  });
+  
+  if (!agent) {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
+  
+  const { userToken, encryptionKey } = await circleWalletService.getUserToken(agent.circleUserId);
+  
+  // Create transfer challenge
+  const { challengeId } = await circleWalletService.initiateTransfer(
+    agent.circleUserId,
+    agent.circleWalletId,
+    process.env.USDC_TOKEN_ID!,
+    toAddress,
+    amount
+  );
+  
+  return c.json({
+    userToken,
+    encryptionKey,
+    challengeId,
+    message: 'Confirm withdrawal by entering your PIN',
+  });
+});
+
+/**
+ * GET /api/agents/:id/balance
+ * Get agent's Circle wallet balance
+ */
+agentRoutes.get('/:id/balance', async (c) => {
+  const agentId = c.req.param('id');
+  
+  const agent = await db.query.agents.findFirst({
+    where: (t, { eq }) => eq(t.id, agentId),
+  });
+  
+  if (!agent) {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
+  
+  const balances = await circleWalletService.getWalletBalance(agent.circleWalletId);
+  const usdcBalance = balances?.find(b => b.token.symbol === 'USDC');
+  
+  return c.json({
+    walletAddress: agent.circleWalletAddress,
+    balance: usdcBalance?.amount || '0',
+    currency: 'USDC',
+  });
+});
+
+export default agentRoutes;
+```
+
+### Database Schema Updates
+
+```typescript
+// backend/src/db/schema.ts
+import { pgTable, varchar, timestamp, bigint, boolean, uuid, text, jsonb } from 'drizzle-orm/pg-core';
+
+// Pending registrations (before wallet setup complete)
+export const pendingAgentRegistrations = pgTable('pending_agent_registrations', {
+  id: varchar('id', { length: 100 }).primaryKey(), // Circle user ID
+  agentName: varchar('agent_name', { length: 100 }).notNull(),
+  description: text('description'),
+  offerings: jsonb('offerings'),
+  status: varchar('status', { length: 20 }).default('pending_wallet'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Agents with Circle wallets
+export const agents = pgTable('agents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  circleUserId: varchar('circle_user_id', { length: 100 }).unique().notNull(),
+  circleWalletId: varchar('circle_wallet_id', { length: 100 }).unique().notNull(),
+  circleWalletAddress: varchar('circle_wallet_address', { length: 42 }).unique().notNull(),
+  name: varchar('name', { length: 100 }).notNull(),
+  description: text('description'),
+  ensName: varchar('ens_name', { length: 100 }),
+  totalStaked: bigint('total_staked', { mode: 'bigint' }).default(0n),
+  lockedStake: bigint('locked_stake', { mode: 'bigint' }).default(0n),
+  isActive: boolean('is_active').default(false),
+  registeredAt: timestamp('registered_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Clients with Circle wallets
+export const clients = pgTable('clients', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  circleUserId: varchar('circle_user_id', { length: 100 }).unique().notNull(),
+  circleWalletId: varchar('circle_wallet_id', { length: 100 }),
+  circleWalletAddress: varchar('circle_wallet_address', { length: 42 }),
+  email: varchar('email', { length: 255 }),
+  name: varchar('name', { length: 100 }),
+  status: varchar('status', { length: 20 }).default('pending_wallet'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Wallet transactions for auditing
+export const walletTransactions = pgTable('wallet_transactions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userType: varchar('user_type', { length: 10 }).notNull(), // 'agent' or 'client'
+  userId: uuid('user_id').notNull(),
+  circleTransactionId: varchar('circle_transaction_id', { length: 100 }),
+  txHash: varchar('tx_hash', { length: 66 }),
+  direction: varchar('direction', { length: 10 }).notNull(), // 'in' or 'out'
+  amount: bigint('amount', { mode: 'bigint' }).notNull(),
+  destinationAddress: varchar('destination_address', { length: 42 }),
+  status: varchar('status', { length: 20 }).default('pending'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+```
+
+### API Endpoints Summary
+
+| Endpoint | Method | Description | Returns |
+|----------|--------|-------------|---------|
+| `/api/agents/register` | POST | Start agent registration | challengeId for PIN setup |
+| `/api/agents/register/complete` | POST | Complete after PIN setup | walletAddress |
+| `/api/agents/:id/stake` | POST | Start staking (USDC approval) | challengeId |
+| `/api/agents/:id/stake/execute` | POST | Execute stake | challengeId |
+| `/api/agents/:id/withdraw` | POST | Withdraw to external address | challengeId |
+| `/api/agents/:id/balance` | GET | Get wallet balance | USDC balance |
+| `/api/clients/register` | POST | Start client registration | challengeId |
+| `/api/clients/register/complete` | POST | Complete client registration | walletAddress |
+
+### Security Notes
+
+1. **Backend cannot sign transactions** - only creates challenges
+2. **Session tokens are short-lived** - get fresh token for each operation
+3. **All fund movements require PIN** - enforced by Circle
+4. **Challenge IDs are one-time use** - cannot be replayed
 
 ## Architecture
 

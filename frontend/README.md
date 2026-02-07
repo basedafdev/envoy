@@ -536,12 +536,390 @@ function useAgentProfile(address: string) {
 3. Frontend uploads file directly to cloud storage
 4. Frontend sends storage URL to backend for database record
 
+## Circle Wallet Integration (User-Controlled / Non-Custodial)
+
+The frontend integrates with Circle's User-Controlled Wallets SDK to provide non-custodial wallet functionality. Users control their funds via a PIN - the platform cannot move funds without user approval.
+
+### Installation
+
+```bash
+npm install @circle-fin/w3s-pw-web-sdk
+```
+
+### New Files to Create
+
+```
+frontend/src/
+├── services/
+│   └── circle-wallet.ts       # Circle SDK wrapper
+├── hooks/
+│   └── useCircleWallet.ts     # React hook for wallet operations
+├── components/
+│   └── registration/
+│       ├── AgentRegistration.tsx   # Agent signup flow
+│       └── ClientRegistration.tsx  # Client signup flow
+└── stores/
+    └── walletStore.ts         # Circle wallet state (updated)
+```
+
+### Circle Wallet Service
+
+```typescript
+// frontend/src/services/circle-wallet.ts
+import { W3SSdk } from '@circle-fin/w3s-pw-web-sdk';
+
+class CircleWalletClient {
+  private sdk: W3SSdk;
+  private appId: string;
+
+  constructor() {
+    this.appId = import.meta.env.VITE_CIRCLE_APP_ID;
+    this.sdk = new W3SSdk();
+  }
+
+  /**
+   * Configure SDK with user session from backend
+   */
+  setUserSession(userToken: string, encryptionKey: string) {
+    this.sdk.setAppSettings({ appId: this.appId });
+    this.sdk.setAuthentication({ userToken, encryptionKey });
+  }
+
+  /**
+   * Execute a challenge - opens Circle's PIN modal
+   * Used for: wallet creation, staking, withdrawals, job creation, approvals
+   */
+  executeChallenge(challengeId: string): Promise<ChallengeResult> {
+    return new Promise((resolve, reject) => {
+      this.sdk.execute(challengeId, (error, result) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(result as ChallengeResult);
+        }
+      });
+    });
+  }
+}
+
+interface ChallengeResult {
+  type: string;
+  status: 'COMPLETE' | 'FAILED' | 'PENDING';
+}
+
+export const circleWallet = new CircleWalletClient();
+```
+
+### Circle Wallet Hook
+
+```typescript
+// frontend/src/hooks/useCircleWallet.ts
+import { useState, useCallback } from 'react';
+import { circleWallet } from '../services/circle-wallet';
+
+interface ChallengeResponse {
+  userId: string;
+  userToken: string;
+  encryptionKey: string;
+  challengeId: string;
+}
+
+export function useCircleWallet() {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Initialize wallet for new user (PIN setup)
+   */
+  const initializeWallet = useCallback(async (
+    endpoint: string,
+    formData: Record<string, any>
+  ): Promise<{ userId: string }> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // 1. Call backend to create Circle user and get challenge
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      
+      if (!response.ok) throw new Error('Registration failed');
+      
+      const { userId, userToken, encryptionKey, challengeId }: ChallengeResponse = 
+        await response.json();
+
+      // 2. Configure SDK with user session
+      circleWallet.setUserSession(userToken, encryptionKey);
+
+      // 3. Execute challenge - opens PIN setup modal
+      await circleWallet.executeChallenge(challengeId);
+
+      return { userId };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Wallet initialization failed';
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  /**
+   * Execute a transaction that requires PIN approval
+   */
+  const executeTransaction = useCallback(async (
+    endpoint: string,
+    payload: Record<string, any>
+  ): Promise<void> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // 1. Get challenge from backend
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      
+      if (!response.ok) throw new Error('Transaction request failed');
+      
+      const { userToken, encryptionKey, challengeId }: ChallengeResponse = 
+        await response.json();
+
+      // 2. Configure SDK
+      circleWallet.setUserSession(userToken, encryptionKey);
+
+      // 3. Execute challenge - opens PIN entry modal
+      await circleWallet.executeChallenge(challengeId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Transaction failed';
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  return {
+    initializeWallet,
+    executeTransaction,
+    isLoading,
+    error,
+    clearError: () => setError(null),
+  };
+}
+```
+
+### Updated Wallet Store
+
+```typescript
+// frontend/src/stores/walletStore.ts
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+interface WalletState {
+  // Circle wallet info
+  circleUserId: string | null;
+  circleWalletId: string | null;
+  circleWalletAddress: string | null;
+  
+  // User info
+  userType: 'agent' | 'client' | null;
+  isRegistered: boolean;
+  
+  // Actions
+  setCircleWallet: (userId: string, walletId: string, walletAddress: string) => void;
+  setUserType: (type: 'agent' | 'client') => void;
+  clearWallet: () => void;
+}
+
+export const useWalletStore = create<WalletState>()(
+  persist(
+    (set) => ({
+      circleUserId: null,
+      circleWalletId: null,
+      circleWalletAddress: null,
+      userType: null,
+      isRegistered: false,
+
+      setCircleWallet: (userId, walletId, walletAddress) =>
+        set({
+          circleUserId: userId,
+          circleWalletId: walletId,
+          circleWalletAddress: walletAddress,
+          isRegistered: true,
+        }),
+
+      setUserType: (type) => set({ userType: type }),
+
+      clearWallet: () =>
+        set({
+          circleUserId: null,
+          circleWalletId: null,
+          circleWalletAddress: null,
+          userType: null,
+          isRegistered: false,
+        }),
+    }),
+    {
+      name: 'envoy-wallet',
+    }
+  )
+);
+```
+
+### Agent Registration Component
+
+```tsx
+// frontend/src/components/registration/AgentRegistration.tsx
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useCircleWallet } from '../../hooks/useCircleWallet';
+import { useWalletStore } from '../../stores/walletStore';
+
+type RegistrationStep = 
+  | 'form' 
+  | 'creating_wallet' 
+  | 'wallet_created' 
+  | 'approving_usdc'
+  | 'staking'
+  | 'complete';
+
+export function AgentRegistration() {
+  const navigate = useNavigate();
+  const { initializeWallet, executeTransaction, isLoading, error } = useCircleWallet();
+  const { setCircleWallet, setUserType } = useWalletStore();
+  
+  const [step, setStep] = useState<RegistrationStep>('form');
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    offerings: [] as string[],
+  });
+  const [userId, setUserId] = useState<string | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+
+  // Step 1: Create wallet (user sets PIN)
+  const handleCreateWallet = async () => {
+    setStep('creating_wallet');
+
+    try {
+      const { userId } = await initializeWallet('/api/agents/register', formData);
+      setUserId(userId);
+
+      // Complete registration to get wallet address
+      const completeRes = await fetch('/api/agents/register/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      const { walletAddress, walletId } = await completeRes.json();
+
+      setWalletAddress(walletAddress);
+      setCircleWallet(userId, walletId, walletAddress);
+      setUserType('agent');
+      setStep('wallet_created');
+    } catch {
+      setStep('form');
+    }
+  };
+
+  // Step 2: Stake USDC (requires 2 PIN entries: approve + stake)
+  const handleStake = async (amount: string) => {
+    if (!userId) return;
+
+    try {
+      // First: Approve USDC spending
+      setStep('approving_usdc');
+      await executeTransaction(`/api/agents/${userId}/stake`, {
+        amount,
+        agentName: formData.name,
+      });
+
+      // Second: Execute stake
+      setStep('staking');
+      await executeTransaction(`/api/agents/${userId}/stake/execute`, {
+        amount,
+        agentName: formData.name,
+      });
+
+      setStep('complete');
+      
+      // Redirect to dashboard after short delay
+      setTimeout(() => navigate('/dashboard'), 2000);
+    } catch {
+      setStep('wallet_created');
+    }
+  };
+
+  return (
+    <div className="max-w-md mx-auto p-6">
+      {error && (
+        <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-4">
+          {error}
+        </div>
+      )}
+
+      {step === 'form' && (
+        <FormStep 
+          formData={formData} 
+          setFormData={setFormData} 
+          onSubmit={handleCreateWallet}
+          isLoading={isLoading}
+        />
+      )}
+
+      {step === 'creating_wallet' && <LoadingStep message="Creating wallet... Set your PIN" />}
+
+      {step === 'wallet_created' && (
+        <WalletCreatedStep
+          walletAddress={walletAddress!}
+          onStake={() => handleStake('50000000')} // $50 USDC
+          isLoading={isLoading}
+        />
+      )}
+
+      {step === 'approving_usdc' && <LoadingStep message="Approving USDC... Enter PIN" />}
+      {step === 'staking' && <LoadingStep message="Staking... Enter PIN" />}
+
+      {step === 'complete' && (
+        <CompleteStep agentName={formData.name} />
+      )}
+    </div>
+  );
+}
+
+// Sub-components
+function FormStep({ formData, setFormData, onSubmit, isLoading }) { /* ... */ }
+function LoadingStep({ message }: { message: string }) { /* ... */ }
+function WalletCreatedStep({ walletAddress, onStake, isLoading }) { /* ... */ }
+function CompleteStep({ agentName }: { agentName: string }) { /* ... */ }
+```
+
+### Registration Flow Summary
+
+| User Action | Frontend | Backend | Circle |
+|-------------|----------|---------|--------|
+| Fill form & submit | POST /api/agents/register | Create Circle user, return challengeId | - |
+| Set PIN | sdk.execute(challengeId) | - | Create wallet on Arc |
+| Complete registration | POST /api/agents/register/complete | Store wallet in DB | - |
+| Click "Stake" | POST /api/agents/:id/stake | Create approval challenge | - |
+| Enter PIN (approve) | sdk.execute(challengeId) | - | Sign USDC.approve() |
+| Enter PIN (stake) | sdk.execute(challengeId) | - | Sign AgentRegistry.stake() |
+
 ## Environment Variables
 
 ```env
 # API
 VITE_API_BASE_URL=http://localhost:3000
 VITE_WS_URL=ws://localhost:3000
+
+# Circle SDK
+VITE_CIRCLE_APP_ID=your_circle_app_id
 
 # Blockchain
 VITE_ARC_CHAIN_ID=16180

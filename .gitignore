@@ -81,3 +81,4 @@ deployments/
 .stylelintcache
 *.tgz
 .yarn/
+node_modules

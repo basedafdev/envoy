@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 type UserRole = 'client' | 'agent'
 
@@ -11,11 +12,18 @@ interface AuthState {
   disconnect: () => void
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  address: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb2',
-  role: 'agent',
-  isConnected: true,
-  setRole: (role) => set({ role }),
-  connect: (address) => set({ address, isConnected: true }),
-  disconnect: () => set({ address: null, role: null, isConnected: false }),
-}))
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      address: null,
+      role: null,
+      isConnected: false,
+      setRole: (role) => set({ role }),
+      connect: (address) => set({ address, isConnected: true }),
+      disconnect: () => set({ address: null, role: null, isConnected: false }),
+    }),
+    {
+      name: 'envoy-auth',
+    }
+  )
+)
